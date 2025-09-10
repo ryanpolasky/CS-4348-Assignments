@@ -16,21 +16,17 @@ void runShell() {
         std::cout << "m% ";
         std::getline(std::cin, command);
         
-        // Trim whitespace from command
         size_t start = command.find_first_not_of(" \t\r\n");
         if (start == std::string::npos) {
-            // Empty or whitespace-only command
             continue;
         }
         size_t end = command.find_last_not_of(" \t\r\n");
         command = command.substr(start, end - start + 1);
         
-        // Check for exit command
         if (command == "myexit") {
             break;
         }
         
-        // Skip empty commands
         if (command.empty()) {
             continue;
         }
