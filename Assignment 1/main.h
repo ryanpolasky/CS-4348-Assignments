@@ -8,8 +8,9 @@
 #include <iostream>
 #include <string>
 #include <cstdlib>
-#include <windows.h>
-#include <process.h>
+#include <unistd.h>
+#include <sys/wait.h>
+#include <sys/stat.h>
 
 void runShell();
 void executeCommand(const std::string& command);

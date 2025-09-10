@@ -31,73 +31,55 @@ void runShell() {
 }
 
 void executeCommand(const std::string& command) {
-    STARTUPINFO si;
-    PROCESS_INFORMATION pi;
-    
-    ZeroMemory(&si, sizeof(si));
-    si.cb = sizeof(si);
-    ZeroMemory(&pi, sizeof(pi));
-    
     // Parse command and arguments
     size_t spacePos = command.find(' ');
-    std::string fullCommand;
+    std::string prog;
+    std::string args;
     
     if (spacePos == std::string::npos) {
-        // No arguments - try to find executable
-        std::string prog = command;
-        
-        // Try current directory first with .exe extension
-        fullCommand = prog + ".exe";
-        if (GetFileAttributes(fullCommand.c_str()) == INVALID_FILE_ATTRIBUTES) {
-            // Try without .exe extension
-            fullCommand = prog;
-            if (GetFileAttributes(fullCommand.c_str()) == INVALID_FILE_ATTRIBUTES) {
-                // Try system commands
-                fullCommand = "cmd /c " + command;
-            }
-        }
+        prog = command;
+        args = "";
     } else {
-        // Has arguments
-        std::string prog = command.substr(0, spacePos);
-        std::string args = command.substr(spacePos + 1);
-        
-        // Try current directory first with .exe extension
-        fullCommand = prog + ".exe " + args;
-        if (GetFileAttributes((prog + ".exe").c_str()) == INVALID_FILE_ATTRIBUTES) {
-            fullCommand = prog + " " + args;
-            if (GetFileAttributes(prog.c_str()) == INVALID_FILE_ATTRIBUTES) {
-                // Try system commands
-                fullCommand = "cmd /c " + command;
+        prog = command.substr(0, spacePos);
+        args = command.substr(spacePos + 1);
+    }
+    
+    // Check if executable exists in current directory
+    struct stat buffer;
+    bool foundLocal = (stat(prog.c_str(), &buffer) == 0);
+    
+    pid_t pid = fork();
+    
+    if (pid == 0) {
+        // Child process
+        if (foundLocal) {
+            // Execute local program
+            if (args.empty()) {
+                execlp(prog.c_str(), prog.c_str(), (char*)NULL);
+            } else {
+                // Simple argument parsing - split on spaces
+                std::string fullCmd = prog + " " + args;
+                execl("/bin/sh", "sh", "-c", fullCmd.c_str(), (char*)NULL);
+            }
+        } else {
+            // Try to execute as system command
+            if (args.empty()) {
+                execlp(prog.c_str(), prog.c_str(), (char*)NULL);
+            } else {
+                std::string fullCmd = prog + " " + args;
+                execl("/bin/sh", "sh", "-c", fullCmd.c_str(), (char*)NULL);
             }
         }
-    }
-    
-    // Convert string to char array for CreateProcess
-    char* cmdLine = new char[fullCommand.length() + 1];
-    strcpy(cmdLine, fullCommand.c_str());
-    
-    // Start the child process
-    if (!CreateProcess(NULL,   // No module name (use command line)
-        cmdLine,               // Command line
-        NULL,                  // Process handle not inheritable
-        NULL,                  // Thread handle not inheritable
-        FALSE,                 // Set handle inheritance to FALSE
-        0,                     // No creation flags
-        NULL,                  // Use parent's environment block
-        NULL,                  // Use parent's starting directory
-        &si,                   // Pointer to STARTUPINFO structure
-        &pi)                   // Pointer to PROCESS_INFORMATION structure
-    ) {
+        
+        // If we get here, exec failed
         std::cerr << "Command not found: " << command << std::endl;
-        delete[] cmdLine;
-        return;
+        exit(1);
+    } else if (pid > 0) {
+        // Parent process - wait for child to complete
+        int status;
+        waitpid(pid, &status, 0);
+    } else {
+        // Fork failed
+        std::cerr << "Failed to create process for: " << command << std::endl;
     }
-    
-    // Wait until child process exits
-    WaitForSingleObject(pi.hProcess, INFINITE);
-    
-    // Close process and thread handles
-    CloseHandle(pi.hProcess);
-    CloseHandle(pi.hThread);
-    delete[] cmdLine;
 }
